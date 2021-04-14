@@ -27,13 +27,110 @@ SOFTWARE.
 local lib = {}
 local jit_prof = require("jit.profile")
 
-local function newNode()
+-- private fields
+
+local tree
+local vmstates
+
+-- private methods
+
+local newNode
+local printTree
+local printVmState
+local updateNode
+local updateTree
+
+-- public methods
+
+function lib.start()
+    tree = tree or newNode()
+    vmstates = vmstates or {}
+
+    jit_prof.start("f", function(thread, samples, vmstate)
+        local stack = jit_prof.dumpstack(thread, "pFZ;", -100)
+
+        updateTree(stack, samples)
+
+        local vmstateStat = vmstates[vmstate] or 0
+        vmstates[vmstate] = vmstateStat + samples
+    end)
+end
+
+function lib.stop()
+    jit_prof.stop()
+end
+
+function lib.report(n)
+    print("Samples: " .. tree.samples)
+    printTree(tree, "", n or 100)
+    printVmState()
+end
+
+function lib.reset()
+    tree = newNode()
+    vmstates = {}
+end
+
+-- private methods
+
+function newNode()
     return { samples = 0, children = {} }
 end
 
-local tree = newNode()
+function updateTree(stack, samples)
+    local offset = 1
+    local node = tree
+    node.samples = node.samples + samples
+    while true do
+        local index = string.find(stack, ";", offset, true)
+        if not index then
+            node = updateNode(node, string.sub(stack, offset), samples)
+            break
+        end
+        node = updateNode(node, string.sub(stack, offset, index - 1), samples)
+        offset = index + 1
+    end
+end
 
-local function generateReport(node, indent, remainingDepth)
+function updateNode(node, element, samples)
+    local child = node.children[element]
+    if not child then
+        child = newNode()
+        node.children[element] = child
+    end
+    child.samples = child.samples + samples
+
+    return child
+end
+
+function printVmState()
+    local stateNames = {
+        N = "native (compiled) code",
+        I = "interpreted code",
+        C = "C code",
+        G = "the garbage collector",
+        J = "the JIT compiler"
+    }
+    local items = {}
+    for k, v in pairs(vmstates) do
+        table.insert(items, {
+            samples = v,
+            code = k
+        })
+    end
+    table.sort(items, function(a, b)
+        return a.samples > b.samples
+    end)
+    print("VM States:")
+    for i, v in ipairs(items) do
+        local w = v.samples / tree.samples
+        local pct = string.format("%.2f", 100 * w)
+        pct = string.rep(" ", 5 - #pct) .. pct
+        print("  " .. pct  .. " % - " .. (stateNames[v.code] or v.code))
+    end
+end
+
+function printTree(node, indent, remainingDepth)
     local children = {}
     for k, v in pairs(node.children) do
         table.insert(children, { name = k, node = v })
@@ -52,66 +149,9 @@ local function generateReport(node, indent, remainingDepth)
             name = string.gsub(name, ":", " : ")
             name = string.gsub(name, " : /", ":/") -- windows disk letter
             print(indent .. pct .. " % - " .. name)
-            generateReport(v.node, indent .. "  ", remainingDepth - 1)
+            printTree(v.node, indent .. "  ", remainingDepth - 1)
         end
     end
-end
-
-local function calcRelWeights(node)
-    local w = node.samples / tree.samples
-    node.weight = string.format("%.2f %%", 100 * w)
-    for k, v in pairs(node.children) do
-        if type(v) == 'table' then
-            calcRelWeights(v)
-        end
-    end
-end
-
-local function append(node, element, samples)
-    local child = node.children[element]
-    if not child then
-        child = newNode()
-        node.children[element] = child
-    end
-    child.samples = child.samples + samples
-
-    return child
-end
-
-local function parseStack(stack, samples)
-    local offset = 1
-    local node = tree
-    node.samples = node.samples + samples
-    while true do
-        local index = string.find(stack, ";", offset, true)
-        if not index then
-            node = append(node, string.sub(stack, offset), samples)
-            break
-        end
-        node = append(node, string.sub(stack, offset, index - 1), samples)
-        offset = index + 1
-    end
-end
-
-function lib.start()
-    jit_prof.start("f", function(thread, samples, vmstate)
-        local stack = jit_prof.dumpstack(thread, "pFZ;", -100)
-
-        parseStack(stack, samples)
-    end)
-end
-
-function lib.stop()
-    jit_prof.stop()
-end
-
-function lib.report(n)
-    print("Samples: " .. tree.samples)
-    generateReport(tree, "", n or 100)
-end
-
-function lib.reset()
-    tree = newNode()
 end
 
 return lib
