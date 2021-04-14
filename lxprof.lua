@@ -24,7 +24,7 @@ SOFTWARE.
 
 ]]--
 
-local xprof = {}
+local lib = {}
 local jit_prof = require("jit.profile")
 
 local function newNode()
@@ -93,7 +93,7 @@ local function parseStack(stack, samples)
     end
 end
 
-function xprof.start()
+function lib.start()
     jit_prof.start("f", function(thread, samples, vmstate)
         local stack = jit_prof.dumpstack(thread, "pFZ;", -100)
 
@@ -101,17 +101,17 @@ function xprof.start()
     end)
 end
 
-function xprof.stop()
+function lib.stop()
     jit_prof.stop()
 end
 
-function xprof.report(n)
+function lib.report(n)
     print("Samples: " .. tree.samples)
     generateReport(tree, "", n or 100)
 end
 
-function xprof.reset()
+function lib.reset()
     tree = newNode()
 end
 
-return xprof
+return lib
