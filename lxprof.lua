@@ -31,6 +31,7 @@ local jit_prof = require("jit.profile")
 
 local tree
 local vmstates
+local running = false
 
 -- private methods
 
@@ -39,6 +40,11 @@ local printTree
 local printVmState
 local updateNode
 local updateTree
+local saveLines
+
+-- public fields
+
+lib.dateBasedReportName = false
 
 -- public methods
 
@@ -54,16 +60,28 @@ function lib.start()
         local vmstateStat = vmstates[vmstate] or 0
         vmstates[vmstate] = vmstateStat + samples
     end)
+    running = true
 end
 
 function lib.stop()
+    running = false
     jit_prof.stop()
 end
 
 function lib.report(n)
-    print("Samples: " .. tree.samples)
-    printTree(tree, "", n or 100)
-    printVmState()
+    if running then
+        local results = {}
+        table.insert(results, "Samples: " .. tree.samples)
+        printTree(tree, "", n or 100, results)
+        printVmState(results)
+        if lib.dateBasedReportName then
+            saveLines(os.date("lxprof.%Y%m%dT%H%M%SZ.yaml"), results)
+
+        end
+        saveLines("lxprof.latest.yaml", results)
+    else
+        print("please stop profiler before calling 'report()'")
+    end
 end
 
 function lib.reset()
@@ -103,7 +121,7 @@ function updateNode(node, element, samples)
     return child
 end
 
-function printVmState()
+function printVmState(results)
     local stateNames = {
         N = "native (compiled) code",
         I = "interpreted code",
@@ -121,16 +139,16 @@ function printVmState()
     table.sort(items, function(a, b)
         return a.samples > b.samples
     end)
-    print("VM States:")
+    table.insert(results, "VM States:")
     for i, v in ipairs(items) do
         local w = v.samples / tree.samples
         local pct = string.format("%.2f", 100 * w)
         pct = string.rep(" ", 5 - #pct) .. pct
-        print("  " .. pct  .. " % - " .. (stateNames[v.code] or v.code))
+        table.insert(results, "  " .. pct .. " % - " .. (stateNames[v.code] or v.code))
     end
 end
 
-function printTree(node, indent, remainingDepth)
+function printTree(node, indent, remainingDepth, results)
     local children = {}
     for k, v in pairs(node.children) do
         table.insert(children, { name = k, node = v })
@@ -139,7 +157,7 @@ function printTree(node, indent, remainingDepth)
         return a.node.samples > b.node.samples
     end)
     if remainingDepth <= 0 then
-        print(indent .. "...")
+        table.insert(results, indent .. "...")
     else
         for i, v in ipairs(children) do
             local w = v.node.samples / tree.samples
@@ -148,10 +166,24 @@ function printTree(node, indent, remainingDepth)
             local name = v.name
             name = string.gsub(name, ":", " : ")
             name = string.gsub(name, " : /", ":/") -- windows disk letter
-            print(indent .. pct .. " % - " .. name)
-            printTree(v.node, indent .. "  ", remainingDepth - 1)
+            table.insert(results, indent .. pct .. " % - " .. name)
+            printTree(v.node, indent .. "  ", remainingDepth - 1, results)
         end
     end
+end
+
+function saveLines(fname, lines)
+    local f, err = io.open(fname, "w")
+    if not f then
+        error("failed to open file. " .. err)
+    end
+    for i, v in ipairs(lines) do
+        f:write(v)
+        f:write("\n")
+        f:flush()
+    end
+    f:close()
+    print("file saved: " .. fname)
 end
 
 return lib

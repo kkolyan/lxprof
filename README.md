@@ -4,8 +4,8 @@ frontend for [LuaJit 2.1 profiler](https://blast.hk/moonloader/luajit/ext_profil
 # Features
 * easy programmatic use
 * hierarchical report
-* report can be opened as YAML in any advanced text editor with power of fold/expand, that gives experience near to pro-level profilers
-* as fast as hell (thanks for LuaJit profiling backend)
+* report is YAML, so its sections can be folded and expanded using any advanced text editor
+* fast as hell (thanks for LuaJit profiling backend)
 
 # Usage
 download `lxprof.lua` into the project, then:
@@ -18,8 +18,14 @@ lxprof.start()
 -- stop gathering samples
 lxprof.stop()
 
--- print report to stdout
+-- generate report report
 lxprof.report()
+
+-- (default) report stored to file "lxprof.latest.yaml" (overwriting) 
+lxprof.dateBasedReportName = false
+
+-- report stored to date-based file "lxprof.${date}.yaml" 
+lxprof.dateBasedReportName = true
 
 -- delete all gathered samples
 lxprof.reset()
