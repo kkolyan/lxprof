@@ -8,7 +8,7 @@ frontend for [LuaJit 2.1 profiler](https://blast.hk/moonloader/luajit/ext_profil
 * fast as hell (thanks for LuaJit profiling backend)
 
 # Usage
-download `lxprof.lua` into the project, then:
+put `lxprof.lua` into the project, then:
 ```Lua
 local lxprof = require("lxprof")
 
