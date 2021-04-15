@@ -70,6 +70,8 @@ end
 
 function lib.report(n)
     if running then
+        print("please stop profiler before calling 'report()'")
+    else
         local results = {}
         table.insert(results, "Samples: " .. tree.samples)
         printTree(tree, "", n or 100, results)
@@ -79,8 +81,6 @@ function lib.report(n)
 
         end
         saveLines("lxprof.latest.yaml", results)
-    else
-        print("please stop profiler before calling 'report()'")
     end
 end
 
